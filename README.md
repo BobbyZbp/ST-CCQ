@@ -1,115 +1,117 @@
-# WSRL: Warm-Start Reinforcement Learning
-[](https:/zhouzypaul.github.io/images/paper-images/wsrl/wsrl.png)
-[![arXiv](https://img.shields.io/badge/arXiv-2412.07762-df2a2a.svg?style=for-the-badge)](http://arxiv.org/abs/2412.07762)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Static Badge](https://img.shields.io/badge/Project-Page-a?style=for-the-badge)](https://zhouzypaul.github.io/wsrl)
+# FOCUS: Footprint-based Offline-to-online Critic Selection
 
-This is the code release for paper [Efficient Online Reinforcement Learning Fine-Tuning Need Not Retain Offline Data](http://arxiv.org/abs/2412.07762). We provide the implementation of [WSRL](http://arxiv.org/abs/2412.07762) (Warm-Start Reinforcement Learning), as well as popular actor-critic RL algorithms in JAX and Flax: [IQL](https://arxiv.org/abs/2110.06169), [CQL](https://arxiv.org/abs/2006.04779), [CalQL](https://arxiv.org/abs/2303.05479), [SAC](https://arxiv.org/abs/1801.01290), [RLPD](https://arxiv.org/abs/2302.02948). Variants of SAC also supported, such as [TD3](https://arxiv.org/pdf/1802.09477), [REDQ](https://arxiv.org/abs/2101.05982), and IQL policy extraction supports both AWR and DDPG+BC.
-We support the following environments: D4RL antmaze, adroit, kitchen, and Mujoco locomotion, but the code can be easily adpated to work with other environments and datasets.
+**Transfer-Ready Critics: Auditing Conservatism Footprints for Offline-to-Online RL**
+*Submitted to the ICML 2026 Workshop on Decision-Making in Offline-to-Online RL.*
 
-The code for the Franka robot experiments is located at [wsrl-robot](https://github.com/zhouzypaul/wsrl-robot). See running instructions in that repo.
+> ⚠️ **Naming note.** The method is called **FOCUS** in the paper. The code uses
+> the earlier internal prefix **`cfs` / `CFS-D`** (Conservative-Footprint Selection)
+> — e.g. `wsrl/cfs/`, `--use_cfs`, `cfs_mode`. **`cfs` == `FOCUS`**, same method.
 
-![teaser](https://zhouzypaul.github.io/images/paper-images/wsrl/teaser.png)
+---
 
-```
-@article{zhou2024efficient,
-  author       = {Zhiyuan Zhou and Andy Peng and Qiyang Li and Sergey Levine and Aviral Kumar},
-  title        = {Efficient Online Reinforcement Learning Fine-Tuning Need Not Retain Offline Data},
-  conference   = {arXiv Pre-print},
-  year         = {2024},
-  url          = {http://arxiv.org/abs/2412.07762},
-}
-```
+## What is FOCUS?
 
+In REDQ-style offline-to-online (O2O) fine-tuning, online Bellman targets are
+built from a *randomly subsampled minimum* over an ensemble of critic heads.
+WSRL transfers the whole offline REDQ ensemble and treats the heads as an
+interchangeable target pool. **FOCUS asks a more specific question: after
+conservative pretraining, which critic heads should be trusted to generate
+online targets?**
 
-## Installation
+FOCUS is a **transition-time audit** (applied once, before online updates) that
+scores each critic head by:
+
+- **Conservative footprint** `ρ_h` — one-sided pessimistic Bellman gap + Bellman
+  inconsistency on an offline calibration batch.
+- **Min-target exposure** `d_h` — how often head `h` wins the REDQ
+  min-over-subset selection.
+- **Combined score** `η_h = ρ_h · d̃_h`.
+
+From the ranking it builds two stress-test pools (`FOCUS-Low` = lowest-η half,
+`FOCUS-High` = highest-η half) and only changes *which heads are allowed to
+generate early online targets* — actor, optimizer, replay, and warmup are
+untouched.
+
+## Key findings
+
+- **Transient outlier phenomenon.** Across matched 550K–900K checkpoint windows
+  on AntMaze **medium-** and **large-diverse** (8 + 8 checkpoints), the
+  highest-footprint head identity changes at **every consecutive checkpoint pair
+  (7/7 transitions in both envs)**, and **6 of 10** heads become the max at some
+  point. Footprint heterogeneity is a *transient checkpoint property*, not a
+  fixed "rogue head".
+- **Offline success ⊥ critic transfer-readiness.** 550K and 850K both reach
+  offline success ≈ 0.65 yet differ in CV(ρ) by ~2× (0.635 vs 0.334).
+- **Risky-pool failure mode.** At the high-heterogeneity 850K checkpoint, forcing
+  high-footprint heads into targets (`FOCUS-High`) cuts post-burn-in high-success
+  occupancy from **0.892 → 0.514** and roughly doubles evaluation volatility.
+- **Mixed, honestly reported.** `FOCUS-Low` matches WSRL at 850K but the
+  predicted ordering reverses at 550K — FOCUS exposes a **risk–diversity
+  tradeoff** rather than being a finished selector.
+
+## Paper artifacts (reproducible from this repo)
+
+| Artifact | Path |
+|----------|------|
+| Figure 1(a) — heterogeneity vs offline success (both envs) | `figures/checkpoint_audit_figure.pdf` |
+| Figure 1(b) — per-head ρ heatmap (medium 8 + large 8) | `figures/rho_heatmap_figure.pdf` |
+| Table 1 input — checkpoint audit sweep | `data/seed0_checkpoint_sweep{,_large}.csv` |
+| Table 2 input — online metrics | `results/cfs/medium_seed0_metrics.csv` |
+| Per-head diagnostic CSVs (medium / large) | `results/cfs/{seed0_sweep,large_seed0_sweep}/cfs_stats_step*.csv` |
+| Aligned 550K–900K summaries | `results/cfs/*/_summary_550_900.csv` |
+| wandb run naming reference | `results/cfs/NAMING.md` |
+
+Regenerate figures:
 ```bash
-conda create -n wsrl python=3.10 -y
-conda activate wsrl
+python analysis/make_checkpoint_audit_figure.py   # Figure 1(a)
+python analysis/make_rho_heatmap_figure.py        # Figure 1(b)
+python analysis/analyze_rho_heatmap.py            # numerical claims + summary CSVs
+```
+
+## FOCUS code map (what's new vs the WSRL base)
+
+| Component | Path | Origin |
+|-----------|------|--------|
+| **Footprint audit core** | `wsrl/cfs/` (`cfs_stats.py`, `cfs_calibration.py`, `cfs_head_selection.py`, `cfs_target_dominance.py`, `cfs_config.py`) | **FOCUS (new)** |
+| **Diagnostic CLI** (per-checkpoint audit) | `analysis/cfs_compute_stats.py` | **FOCUS (new)** |
+| **Figure / analysis scripts** | `analysis/make_*_figure.py`, `analysis/analyze_rho_heatmap.py` | **FOCUS (new)** |
+| **Online integration** | `finetune.py` (`--use_cfs`, `--cfs_mode`, `--cfs_top_k`, `--cfs_stats_output` flags + transition-time block) | WSRL base + FOCUS hooks |
+| **Idempotent patcher** | `apply_cfs_patch.py` | **FOCUS (new)** |
+| Agents (CalQL / SAC / REDQ), envs, replay, eval, training loop | `wsrl/agents`, `wsrl/envs`, `wsrl/data`, `wsrl/common`, `wsrl/utils` | **WSRL (upstream)** |
+
+### Key CLI flags (online run)
+```bash
+python finetune.py --agent calql --config experiments/configs/train_config.py:antmaze_cql \
+  --use_redq --resume_path <ckpt> --env antmaze-medium-diverse-v2 \
+  --use_cfs --cfs_mode low_eta --cfs_top_k 5 \
+  --cfs_stats_output results/cfs/<name>.csv \
+  --num_offline_steps 0 --num_online_steps 200000 --warmup_steps 1250 --utd 4 --batch_size 1024
+```
+`--cfs_mode ∈ {low_eta, low_rho, high_eta, random_topk}`. Omit `--use_cfs` for the standard WSRL baseline.
+
+## Setup & reproduction
+
+See `RUNPOD_SETUP.md` for the full GPU environment. Quickstart:
+```bash
+conda create -n focus python=3.10 -y && conda activate focus
 pip install -r requirements.txt
 ```
 
-For jax, install
-```
-pip install --upgrade "jax[cuda11_pip]==0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-```
+## Status / limitations
 
-To use the D4RL envs, you would also need my fork of the d4rl envs below.
-This fork incorporates the antmaze-ultra environments and fixes the kitchen environment rewards to be consistent between the offline dataset and the environment.
-```
-git clone git@github.com:zhouzypaul/D4RL.git
-cd D4RL
-pip install -e .
-```
+This is a workshop-stage study: **single seed (seed-0)**, online stress-tests on
+**medium-diverse only** (large-diverse used as diagnostic replication). See
+[`NEXT_STEPS.md`](NEXT_STEPS.md) for the planned upgrades (multi-seed, cross-env
+online, baseline comparison, adaptive K) and [`IDEA.md`](IDEA.md) for the core
+research idea and open questions.
 
-To use Mujoco, you would also need to install mujoco manually to `~/.mujoco/` (for more instructions on download see [here](https://github.com/openai/mujoco-py?tab=readme-ov-file#install-mujoco)), and use the following environment variables
-```bash
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco210/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
-```
+---
 
-To use the adroit envs, you would need
-```
-git clone --recursive https://github.com/nakamotoo/mj_envs.git
-cd mj_envs
-git submodule update --remote
-pip install -e .
-```
+## Built on WSRL
 
-Download the adroit dataset from [here](https://drive.google.com/file/d/1yUdJnGgYit94X_AvV6JJP5Y3Lx2JF30Y/view) and unzip the files into `~/adroit_data/`.
-If you would like to put the adroit datasets into another directory, use the environment variable `DATA_DIR_PREFIX` (checkout the code [here](https://github.com/zhouzypaul/wsrl/blob/4b5665987079934a926c10a09bd81bc3c48ea9fa/wsrl/envs/adroit_binary_dataset.py#L7) for more details).
-```bash
-export DATA_DIR_PREFIX=/path/to/your/data
-```
-
-## Running
-The main run script is `finetune.py`. We provide bash scripts in `experiments/scripts/<ENV>` to train WSRL/IQL/CQL/CalQ/RLPD on the different environments.
-
-The shared agent configs are in `experiments/configs/*`, and the environment-specific configs are in `experiments/configs/train_config.py` and in the bash scripts.
-
-### Pre-training
-For example, to run CalQL (with Q-ensemble) pre-training
-```bash
-# on antmaze
-bash experiments/scripts/antmaze/launch_calql_finetune.sh --use_redq --env antmaze-large-diverse-v2
-
-# on adroit
-bash experiments/scripts/adroit/launch_calql_finetune.sh --use_redq --env door-binary-v0
-
-# on kitchen
-bash experiments/scripts/kitchen/launch_calql_finetune.sh --use_redq --env kitchen-mixed-v0
-
-# on mujoco locomotion (CQL pre-train because MC returns are hard to estimate)
-bash experiments/scripts/locomotion/launch_cql_finetune.sh --use_redq --env halfcheetah-medium-replay-v0
-```
-
-### Fine-tuning
-To run WSRL fine-tuning from a pre-trained checkpoint
-```bash
-# on antmaze
-bash experiments/scripts/antmaze/launch_wsrl_finetune.sh --env antmaze-large-diverse-v2 --resume_path /path/to/checkpoint
-
-# on adroit
-bash experiments/scripts/adroit/launch_wsrl_finetune.sh --env door-binary-v0 --resume_path /path/to/checkpoint
-
-# on kitchen
-bash experiments/scripts/kitchen/launch_wsrl_finetune.sh --env kitchen-mixed-v0 --resume_path /path/to/checkpoint
-
-# on mujoco locomotion
-bash experiments/scripts/locomotion/launch_wsrl_finetune.sh --env halfcheetah-medium-replay-v0 --resume_path /path/to/checkpoint
-```
-
-### No Data Retention
-The default setting is to not retain offline data during fine-tuning, as described in the [paper](http://arxiv.org/abs/2412.07762). However, if you wish to retain the data, you can use the `--offline_data_ratio <>` or `--online_sampling_method append` option. Checkout `finetune.py` for more details.
-
-## Contributing
-For a detailed explanation of how the codebase works, please checkout the [contributing.md](contributing.md) file.
-
-To enable code checks and auto-formatting, please install pre-commit hooks (run this in the root directory):
-```
-pre-commit install
-```
-The hooks should now run before every commit. If files are modified during the checks, you'll need to re-stage them and commit again.
-
-## Credits
-This repo is built upon a version of Dibya Ghosh's [jaxrl_minimal](https://github.com/dibyaghosh/jaxrl_minimal) repository, which also included contributions from Kevin Black, Homer Walke, Kyle Stachowicz, and others.
+This repository is a **fork of [WSRL](https://github.com/zhouzypaul/wsrl)**
+(Zhou et al., *Efficient Online RL Fine-Tuning Need Not Retain Offline Data*,
+2024). All base O2O infrastructure — CalQL/SAC/REDQ agents, D4RL dataset
+loading, replay buffer, evaluation, and the training loop — is from WSRL. FOCUS
+adds the conservatism-footprint audit and head-pool selection layer on top.
+The original upstream README is preserved at [`README_WSRL.md`](README_WSRL.md).
