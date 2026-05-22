@@ -112,11 +112,14 @@ def get_config(config_string):
                 #   - 2-head double-Q critic (sac_config default)
                 #   - no LayerNorm (sac_config default; CalQL pretrain didn't use it)
                 #   - same critic/policy hidden dims
-                # The only "WSRL-style" deviation from sac_config is
-                # backup_entropy=True (standard in modern SAC).
+                # backup_entropy=False matches WSRL/REDQ AntMaze convention:
+                # TD target stays y = r + gamma * Q(s', a'), without the
+                # entropy term. Keeping this consistent with antmaze_cql /
+                # antmaze_wsrl avoids a Q-scale shift that would invalidate
+                # BT-CCQ calibration (q_hat) computed on the offline ckpt.
                 agent_kwargs=get_btccq_v2_config(
                     updates=dict(
-                        backup_entropy=True,
+                        backup_entropy=False,
                         policy_kwargs=dict(
                             tanh_squash_distribution=True,
                             std_parameterization="uniform",
