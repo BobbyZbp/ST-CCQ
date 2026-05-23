@@ -3,10 +3,6 @@
 **Transfer-Ready Critics: Auditing Conservatism Footprints for Offline-to-Online RL**
 *Submitted to the ICML 2026 Workshop on Decision-Making in Offline-to-Online RL.*
 
-> ⚠️ **Naming note.** The method is called **FOCUS** in the paper. The code uses
-> the earlier internal prefix **`cfs` / `CFS-D`** (Conservative-Footprint Selection)
-> — e.g. `wsrl/cfs/`, `--use_cfs`, `cfs_mode`. **`cfs` == `FOCUS`**, same method.
-
 ---
 
 ## What is FOCUS?
@@ -68,6 +64,8 @@ python analysis/analyze_rho_heatmap.py            # numerical claims + summary C
 ```
 
 ## FOCUS code map (what's new vs the WSRL base)
+
+*(The implementation uses the module prefix `cfs` for FOCUS internals.)*
 
 | Component | Path | Origin |
 |-----------|------|--------|
