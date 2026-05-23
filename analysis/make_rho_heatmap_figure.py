@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-MED_DIR = Path("results/cfs/seed0_sweep")
-LRG_DIR = Path("results/cfs/large_seed0_sweep")
-OUT_PDF = Path("figures/rho_heatmap_figure.pdf")
-OUT_PNG = Path("figures/rho_heatmap_figure.png")
+MED_DIR = Path("paper/results/seed0_sweep")
+LRG_DIR = Path("paper/results/large_seed0_sweep")
+OUT_PDF = Path("paper/figures/rho_heatmap_figure.pdf")
+OUT_PNG = Path("paper/figures/rho_heatmap_figure.png")
 
 # Aligned analysis window across both envs (50K interval).
 STEP_MIN = 550_000

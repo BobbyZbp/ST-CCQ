@@ -12,10 +12,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
-CSV_MED = "data/seed0_checkpoint_sweep.csv"
-CSV_LRG = "data/seed0_checkpoint_sweep_large.csv"
-OUT_PDF = "figures/checkpoint_audit_figure.pdf"
-OUT_PNG = "figures/checkpoint_audit_figure.png"
+CSV_MED = "paper/data/seed0_checkpoint_sweep.csv"
+CSV_LRG = "paper/data/seed0_checkpoint_sweep_large.csv"
+OUT_PDF = "paper/figures/checkpoint_audit_figure.pdf"
+OUT_PNG = "paper/figures/checkpoint_audit_figure.png"
 
 CV_COLOR = "#2E5A88"
 SUCC_COLOR = "#D67B1E"

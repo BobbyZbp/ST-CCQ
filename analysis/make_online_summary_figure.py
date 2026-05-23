@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 
 # ===== change this path if needed =====
-CSV_PATH = "data/medium_seed0_postburnin_metrics.csv"
-OUT_PDF = "figures/online_summary_figure.pdf"
-OUT_PNG = "figures/online_summary_figure.png"
+CSV_PATH = "paper/data/medium_seed0_postburnin_metrics.csv"
+OUT_PDF = "paper/figures/online_summary_figure.pdf"
+OUT_PNG = "paper/figures/online_summary_figure.png"
 
 df = pd.read_csv(CSV_PATH)
 

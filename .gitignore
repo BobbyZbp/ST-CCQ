@@ -176,3 +176,6 @@ install_jax_on_matrix.sh
 
 # VSCode
 .vscode
+
+# Local-only notes (planning docs, internal md — not for public repo)
+notes/

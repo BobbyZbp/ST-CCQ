@@ -69,7 +69,7 @@ flags.DEFINE_integer(
     20_000,
     "Monte-Carlo dominance samples if exact REDQ subset enumeration is too large.",
 )
-flags.DEFINE_string("output", "results/cfs/cfs_stats.csv", "CSV output path.")
+flags.DEFINE_string("output", "paper/results/cfs_stats.csv", "CSV output path.")
 config_flags.DEFINE_config_file(
     "config",
     None,
